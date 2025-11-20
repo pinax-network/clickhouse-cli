@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -182,7 +181,7 @@ func Log(logLevel zapcore.Level, message string, additionalFields ...zap.Field) 
 		log.Println(message)
 
 		for _, f := range additionalFields {
-			log.Println(fmt.Sprintf("'%s': %+v", f.Key, f))
+			log.Printf("'%s': %+v", f.Key, f)
 		}
 		if logLevel == zapcore.FatalLevel {
 			os.Exit(1)
