@@ -42,7 +42,7 @@ func InitializeGlobalLogger(logDebug bool) (err error) {
 	return nil
 }
 
-// InitializeGlobalConsoleLogger works like InitializeGlobalLogger, but uses a console encoding format which is designed
+// InitializeGlobalConsoleLogger works like InitializeGlobalLogger but uses a console encoding format which is designed
 // for human consumption. This is useful for local development. For Kubernetes environments, InitializeGlobalLogger
 // should be used instead.
 // Note that calling this method will overwrite any global logger set by InitializeGlobalLogger.

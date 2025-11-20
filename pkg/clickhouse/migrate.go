@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"clickhouse-cli/pkg/log"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -25,6 +27,12 @@ var MigrationFilePattern = regexp.MustCompile(`^(\d+)_.*\.sql$`)
 type MigrationFile struct {
 	File string
 	Seq  int
+}
+
+type MigrationRow struct {
+	Version  uint32    `ch:"version"`
+	Dirty    bool      `ch:"dirty"`
+	Sequence time.Time `ch:"sequence"`
 }
 
 type Migration struct {
@@ -62,10 +70,24 @@ func (c *Migration) Run(ctx context.Context) error {
 		return err
 	}
 
+	latestVersion, isDirty, err := c.fetchLatestVersion(ctx)
+	if err != nil {
+		return err
+	}
+
+	if isDirty {
+		return errors.New("schema migrations are in a dirty state, won't execute any migrations")
+	}
+
 	for _, m := range migrationFiles {
 		migration, err := os.ReadFile(path.Join(c.schemaDir, m.File))
 		if err != nil {
 			return fmt.Errorf("failed to read migration file %s: %w", m.File, err)
+		}
+
+		if m.Seq <= latestVersion {
+			log.Info("skipping migration file as it's already applied", zap.String("file", m.File))
+			continue
 		}
 
 		queries := strings.Split(string(migration), ";")
@@ -83,6 +105,7 @@ func (c *Migration) Run(ctx context.Context) error {
 				return fmt.Errorf("failed to execute migration: %w", err)
 			}
 		}
+		log.Info("successfully applied migration", zap.String("file", m.File))
 
 		if err := c.updateTable(ctx, m.Seq, false); err != nil {
 			return fmt.Errorf("failed to update migration table: %w", err)
@@ -95,6 +118,16 @@ func (c *Migration) Run(ctx context.Context) error {
 func (c *Migration) updateTable(ctx context.Context, seq int, dirty bool) error {
 	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES ({seq:UInt32}, {dirty:Bool}, now())", c.database, c.table)
 	return c.chClient.execute(ctx, query, map[string]string{"seq": fmt.Sprintf("%d", seq), "dirty": fmt.Sprintf("%t", dirty)})
+}
+
+func (c *Migration) fetchLatestVersion(ctx context.Context) (version int, dirty bool, err error) {
+	var res MigrationRow
+	err = c.chClient.queryStruct(ctx, fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY version DESC LIMIT 1", c.database, c.table), nil, &res)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to fetch latest migration sequence: %w", err)
+	}
+
+	return int(res.Version), res.Dirty, nil
 }
 
 func (c *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
