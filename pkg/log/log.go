@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -42,7 +41,7 @@ func InitializeGlobalLogger(logDebug bool) (err error) {
 	return nil
 }
 
-// InitializeGlobalConsoleLogger works like InitializeGlobalLogger, but uses a console encoding format which is designed
+// InitializeGlobalConsoleLogger works like InitializeGlobalLogger but uses a console encoding format which is designed
 // for human consumption. This is useful for local development. For Kubernetes environments, InitializeGlobalLogger
 // should be used instead.
 // Note that calling this method will overwrite any global logger set by InitializeGlobalLogger.
@@ -182,7 +181,7 @@ func Log(logLevel zapcore.Level, message string, additionalFields ...zap.Field) 
 		log.Println(message)
 
 		for _, f := range additionalFields {
-			log.Println(fmt.Sprintf("'%s': %+v", f.Key, f))
+			log.Printf("'%s': %+v", f.Key, f)
 		}
 		if logLevel == zapcore.FatalLevel {
 			os.Exit(1)

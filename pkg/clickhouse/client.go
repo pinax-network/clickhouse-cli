@@ -63,11 +63,11 @@ func (c *Client) queryRows(ctx context.Context, query string, parameters clickho
 
 func (c *Client) queryStruct(ctx context.Context, query string, parameters clickhouse.Parameters, result any) error {
 	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
-	res, err := c.conn.Query(getContext(ctx, parameters), query, result)
+	err := c.conn.QueryRow(getContext(ctx, parameters), query, result).ScanStruct(result)
 	if err != nil {
 		return fmt.Errorf("failed to execute Clickhouse query: %w", err)
 	}
-	return res.ScanStruct(result)
+	return nil
 }
 
 func getContext(ctx context.Context, parameters clickhouse.Parameters) context.Context {
