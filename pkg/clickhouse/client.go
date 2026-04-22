@@ -1,10 +1,11 @@
 package clickhouse
 
 import (
-	"clickhouse-cli/pkg/log"
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/pinax-network/clickhouse-cli/pkg/log"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"

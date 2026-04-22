@@ -1,7 +1,6 @@
 package clickhouse
 
 import (
-	"clickhouse-cli/pkg/log"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pinax-network/clickhouse-cli/pkg/log"
 
 	"go.uber.org/zap"
 )
@@ -90,8 +91,8 @@ func (c *Migration) Run(ctx context.Context) error {
 			continue
 		}
 
-		queries := strings.Split(string(migration), ";")
-		for _, query := range queries {
+		queries := strings.SplitSeq(string(migration), ";")
+		for query := range queries {
 			query = strings.TrimSpace(query)
 			if query == "" {
 				continue

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"clickhouse-cli/pkg/clickhouse"
 	"context"
+
+	"github.com/pinax-network/clickhouse-cli/pkg/clickhouse"
 
 	"github.com/urfave/cli/v3"
 )

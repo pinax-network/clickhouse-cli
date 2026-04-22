@@ -1,0 +1,29 @@
+name: Build & Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: "**/*.sum"
+
+      - name: Build
+        run: |
+          go build -v ./cmd/clickhouse-cli
+
+      - name: Run tests in main module
+        run: |
+          go test -v ./...

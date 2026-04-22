@@ -199,46 +199,46 @@ func Debug(message string, additionalFields ...zap.Field) {
 	Log(zapcore.DebugLevel, message, additionalFields...)
 }
 
-func Debugf(template string, args ...interface{}) {
-	SugaredLogger.Debugf(template, args)
+func Debugf(template string, args ...any) {
+	SugaredLogger.Debugf(template, args...)
 }
 
 func Info(message string, additionalFields ...zap.Field) {
 	Log(zapcore.InfoLevel, message, additionalFields...)
 }
 
-func Infof(template string, args ...interface{}) {
-	SugaredLogger.Infof(template, args)
+func Infof(template string, args ...any) {
+	SugaredLogger.Infof(template, args...)
 }
 
 func Warn(message string, additionalFields ...zap.Field) {
 	Log(zapcore.WarnLevel, message, additionalFields...)
 }
 
-func Warnf(template string, args ...interface{}) {
-	SugaredLogger.Warnf(template, args)
+func Warnf(template string, args ...any) {
+	SugaredLogger.Warnf(template, args...)
 }
 
 func Error(message string, additionalFields ...zap.Field) {
 	Log(zapcore.ErrorLevel, message, additionalFields...)
 }
 
-func Errorf(template string, args ...interface{}) {
-	SugaredLogger.Errorf(template, args)
+func Errorf(template string, args ...any) {
+	SugaredLogger.Errorf(template, args...)
 }
 
 func Panic(message string, additionalFields ...zap.Field) {
 	Log(zapcore.PanicLevel, message, additionalFields...)
 }
 
-func Panicf(template string, args ...interface{}) {
-	SugaredLogger.Panicf(template, args)
+func Panicf(template string, args ...any) {
+	SugaredLogger.Panicf(template, args...)
 }
 
 func Fatal(message string, additionalFields ...zap.Field) {
 	Log(zapcore.FatalLevel, message, additionalFields...)
 }
 
-func Fatalf(template string, args ...interface{}) {
-	SugaredLogger.Fatalf(template, args)
+func Fatalf(template string, args ...any) {
+	SugaredLogger.Fatalf(template, args...)
 }
