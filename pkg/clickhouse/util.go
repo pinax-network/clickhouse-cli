@@ -10,7 +10,7 @@ import (
 
 func (c *Client) databaseExists(ctx context.Context, databaseName string) (bool, error) {
 
-	rows, err := c.queryRows(ctx,
+	rows, err := c.QueryRows(ctx,
 		`SELECT 1 FROM system.databases WHERE name = {name:String} LIMIT 1`,
 		map[string]string{"name": databaseName},
 	)
@@ -33,7 +33,7 @@ func (c *Client) databaseExists(ctx context.Context, databaseName string) (bool,
 
 func (c *Client) tableExists(ctx context.Context, databaseName, tableName string) (bool, error) {
 
-	rows, err := c.queryRows(ctx,
+	rows, err := c.QueryRows(ctx,
 		`SELECT 1 FROM system.tables WHERE database = {database:String} AND name = {name:String} LIMIT 1`,
 		map[string]string{"database": databaseName, "name": tableName},
 	)

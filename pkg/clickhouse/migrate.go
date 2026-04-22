@@ -18,12 +18,24 @@ import (
 )
 
 const (
-	SchemaMigrationsDatabaseDDL = "CREATE DATABASE `%s` ON CLUSTER '{cluster}' ENGINE=Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')"
-	SchemaMigrationsTableDDL    = "CREATE TABLE `%s`.`%s` (version UInt32, dirty Bool, sequence DateTime64) ENGINE = ReplicatedMergeTree ORDER BY sequence"
+	schemaMigrationsDatabaseDDLCluster = "CREATE DATABASE `%s` ON CLUSTER '{cluster}' ENGINE=Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')"
+	schemaMigrationsTableDDLCluster    = "CREATE TABLE `%s`.`%s` (version UInt32, dirty Bool, sequence DateTime64) ENGINE = ReplicatedMergeTree ORDER BY sequence"
+
+	schemaMigrationsDatabaseDDLSingle = "CREATE DATABASE `%s`"
+	schemaMigrationsTableDDLSingle    = "CREATE TABLE `%s`.`%s` (version UInt32, dirty Bool, sequence DateTime64) ENGINE = MergeTree ORDER BY sequence"
 )
 
-// MigrationFilePattern matches schema migration files, which need to be named after <sequential_number>_*.sql
+// MigrationFilePattern matches schema migration files, which need to be named after <sequential_number>_*.sql.
+//
+// Note: migration files are split on ';' before execution, which means semicolons inside string literals,
+// comments, or compound statements (e.g. CREATE FUNCTION) are not supported. Write one statement per
+// delimiter or keep literals semicolon-free.
 var MigrationFilePattern = regexp.MustCompile(`^(\d+)_.*\.sql$`)
+
+// identifierPattern restricts database and table names to a safe character set. Required because
+// Clickhouse parameter placeholders cannot be used for identifiers, so names are interpolated
+// directly into DDL.
+var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 type MigrationFile struct {
 	File string
@@ -42,36 +54,46 @@ type Migration struct {
 	database    string
 	table       string
 	createTable bool
+	clusterMode bool
 }
 
-func NewMigration(chClient *Client, schemaDir, table string, createTable bool) (*Migration, error) {
+func NewMigration(chClient *Client, schemaDir, table string, createTable, clusterMode bool) (*Migration, error) {
 
 	tableSplit := strings.Split(table, ".")
 	if len(tableSplit) != 2 {
 		return nil, fmt.Errorf("invalid table name expecting format <database>.<table>, got: %s", table)
 	}
 
+	database, tableName := tableSplit[0], tableSplit[1]
+	if !identifierPattern.MatchString(database) {
+		return nil, fmt.Errorf("invalid database identifier: %q", database)
+	}
+	if !identifierPattern.MatchString(tableName) {
+		return nil, fmt.Errorf("invalid table identifier: %q", tableName)
+	}
+
 	return &Migration{
 		chClient:    chClient,
 		schemaDir:   schemaDir,
-		database:    tableSplit[0],
-		table:       tableSplit[1],
+		database:    database,
+		table:       tableName,
 		createTable: createTable,
+		clusterMode: clusterMode,
 	}, nil
 }
 
-func (c *Migration) Run(ctx context.Context) error {
+func (m *Migration) Run(ctx context.Context) error {
 
-	if err := c.checkMigrationTable(ctx); err != nil {
+	if err := m.checkMigrationTable(ctx); err != nil {
 		return err
 	}
 
-	migrationFiles, err := c.parseMigrationDirectory()
+	migrationFiles, err := m.parseMigrationDirectory()
 	if err != nil {
 		return err
 	}
 
-	latestVersion, isDirty, err := c.fetchLatestVersion(ctx)
+	latestVersion, isDirty, err := m.fetchLatestVersion(ctx)
 	if err != nil {
 		return err
 	}
@@ -80,35 +102,34 @@ func (c *Migration) Run(ctx context.Context) error {
 		return errors.New("schema migrations are in a dirty state, won't execute any migrations")
 	}
 
-	for _, m := range migrationFiles {
-		migration, err := os.ReadFile(path.Join(c.schemaDir, m.File))
+	for _, mf := range migrationFiles {
+		migration, err := os.ReadFile(path.Join(m.schemaDir, mf.File))
 		if err != nil {
-			return fmt.Errorf("failed to read migration file %s: %w", m.File, err)
+			return fmt.Errorf("failed to read migration file %s: %w", mf.File, err)
 		}
 
-		if m.Seq <= latestVersion {
-			log.Info("skipping migration file as it's already applied", zap.String("file", m.File))
+		if mf.Seq <= latestVersion {
+			log.Info("skipping migration file as it's already applied", zap.String("file", mf.File))
 			continue
 		}
 
-		queries := strings.SplitSeq(string(migration), ";")
-		for query := range queries {
+		for query := range strings.SplitSeq(string(migration), ";") {
 			query = strings.TrimSpace(query)
 			if query == "" {
 				continue
 			}
 
-			if err := c.chClient.execute(ctx, query, nil); err != nil {
+			if err := m.chClient.Execute(ctx, query, nil); err != nil {
 				log.Error("failed to execute migration", zap.String("query", query), zap.Error(err))
-				if err := c.updateTable(ctx, m.Seq, true); err != nil {
-					return fmt.Errorf("failed to update migration table: %w", err)
+				if updateErr := m.updateTable(ctx, mf.Seq, true); updateErr != nil {
+					return fmt.Errorf("failed to update migration table: %w", updateErr)
 				}
 				return fmt.Errorf("failed to execute migration: %w", err)
 			}
 		}
-		log.Info("successfully applied migration", zap.String("file", m.File))
+		log.Info("successfully applied migration", zap.String("file", mf.File))
 
-		if err := c.updateTable(ctx, m.Seq, false); err != nil {
+		if err := m.updateTable(ctx, mf.Seq, false); err != nil {
 			return fmt.Errorf("failed to update migration table: %w", err)
 		}
 	}
@@ -116,26 +137,35 @@ func (c *Migration) Run(ctx context.Context) error {
 	return nil
 }
 
-func (c *Migration) updateTable(ctx context.Context, seq int, dirty bool) error {
-	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES ({seq:UInt32}, {dirty:Bool}, now())", c.database, c.table)
-	return c.chClient.execute(ctx, query, map[string]string{"seq": fmt.Sprintf("%d", seq), "dirty": fmt.Sprintf("%t", dirty)})
+func (m *Migration) updateTable(ctx context.Context, seq int, dirty bool) error {
+	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES ({seq:UInt32}, {dirty:Bool}, now())", m.database, m.table)
+	return m.chClient.Execute(ctx, query, map[string]string{
+		"seq":   strconv.Itoa(seq),
+		"dirty": strconv.FormatBool(dirty),
+	})
 }
 
-func (c *Migration) fetchLatestVersion(ctx context.Context) (version int, dirty bool, err error) {
+func (m *Migration) fetchLatestVersion(ctx context.Context) (version int, dirty bool, err error) {
 	var res MigrationRow
-	err = c.chClient.queryStruct(ctx, fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY version DESC LIMIT 1", c.database, c.table), nil, &res)
-	if err != nil {
+	query := fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY version DESC, sequence DESC LIMIT 1", m.database, m.table)
+	if err := m.chClient.QueryStruct(ctx, query, nil, &res); err != nil {
 		return 0, false, fmt.Errorf("failed to fetch latest migration sequence: %w", err)
 	}
 
 	return int(res.Version), res.Dirty, nil
 }
 
-func (c *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
+// parseMigrationDirectory reads the schema directory and returns the migrations in sequence order.
+// An empty directory (no matching files) returns an empty slice, not an error.
+func (m *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
+	return parseMigrationDirectory(m.schemaDir)
+}
 
-	files, err := os.ReadDir(c.schemaDir)
+func parseMigrationDirectory(dir string) ([]MigrationFile, error) {
+
+	files, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read migrations directory %s: %w", c.schemaDir, err)
+		return nil, fmt.Errorf("failed to read migrations directory %s: %w", dir, err)
 	}
 
 	var migrationFiles []MigrationFile
@@ -148,7 +178,6 @@ func (c *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
 		fileName := file.Name()
 		matches := MigrationFilePattern.FindStringSubmatch(fileName)
 		if matches == nil {
-			// Skip non-migration files (could be other files in the directory)
 			continue
 		}
 
@@ -160,61 +189,67 @@ func (c *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
 		migrationFiles = append(migrationFiles, MigrationFile{File: fileName, Seq: seqNum})
 	}
 
-	if len(migrationFiles) == 0 {
-		return nil, fmt.Errorf("no migration files found in directory %s", c.schemaDir)
-	}
-
-	// Sort migration files by sequence number
 	sort.Slice(migrationFiles, func(i, j int) bool {
 		return migrationFiles[i].Seq < migrationFiles[j].Seq
 	})
 
-	// Check for duplicates, gaps and missing sequence numbers in one loop
 	for i, mf := range migrationFiles {
 		expected := i + 1
-		if mf.Seq != expected {
-			if i > 0 && mf.Seq == migrationFiles[i-1].Seq {
-				return nil, fmt.Errorf("invalid migration files, duplicate sequence number: %d", mf.Seq)
-			} else {
-				return nil, fmt.Errorf("missing sequence number: expected %d, but found %d", expected, mf.Seq)
-			}
+		if mf.Seq == expected {
+			continue
 		}
+		if i > 0 && mf.Seq == migrationFiles[i-1].Seq {
+			return nil, fmt.Errorf("invalid migration files, duplicate sequence number: %d", mf.Seq)
+		}
+		return nil, fmt.Errorf("missing sequence number: expected %d, but found %d", expected, mf.Seq)
 	}
 
 	return migrationFiles, nil
 }
 
-func (c *Migration) checkMigrationTable(ctx context.Context) error {
+func (m *Migration) checkMigrationTable(ctx context.Context) error {
 
-	if dbExists, err := c.chClient.databaseExists(ctx, c.database); err != nil {
+	dbExists, err := m.chClient.databaseExists(ctx, m.database)
+	if err != nil {
 		return fmt.Errorf("failed to check if database exists: %w", err)
-	} else if !dbExists {
-		if !c.createTable {
-			return fmt.Errorf("database %q for the schema migrations doesn't exist and should not be created", c.database)
+	}
+	if !dbExists {
+		if !m.createTable {
+			return fmt.Errorf("database %q for the schema migrations doesn't exist and should not be created", m.database)
 		}
-
-		log.Info("creating database for schema_migrations", zap.String("database", c.database))
-		query := fmt.Sprintf(SchemaMigrationsDatabaseDDL, c.database)
-		err = c.chClient.execute(ctx, query, nil)
-		if err != nil {
+		log.Info("creating database for schema_migrations", zap.String("database", m.database))
+		if err := m.chClient.Execute(ctx, fmt.Sprintf(m.databaseDDL(), m.database), nil); err != nil {
 			return fmt.Errorf("failed to create database for schema migrations: %w", err)
 		}
 	}
 
-	if tableExists, err := c.chClient.tableExists(ctx, c.database, c.table); err != nil {
+	tableExists, err := m.chClient.tableExists(ctx, m.database, m.table)
+	if err != nil {
 		return fmt.Errorf("failed to check if table exists: %w", err)
-	} else if !tableExists {
-		if !c.createTable {
-			return fmt.Errorf("table '%s.%s' for the schema migrations doesn't exist and should not be created", c.database, c.table)
+	}
+	if !tableExists {
+		if !m.createTable {
+			return fmt.Errorf("table '%s.%s' for the schema migrations doesn't exist and should not be created", m.database, m.table)
 		}
-
-		log.Info("creating table for schema_migrations", zap.String("database", c.database), zap.String("table", c.table))
-		query := fmt.Sprintf(SchemaMigrationsTableDDL, c.database, c.table)
-		err = c.chClient.execute(ctx, query, nil)
-		if err != nil {
+		log.Info("creating table for schema_migrations", zap.String("database", m.database), zap.String("table", m.table))
+		if err := m.chClient.Execute(ctx, fmt.Sprintf(m.tableDDL(), m.database, m.table), nil); err != nil {
 			return fmt.Errorf("failed to create table for schema migrations: %w", err)
 		}
 	}
 
 	return nil
+}
+
+func (m *Migration) databaseDDL() string {
+	if m.clusterMode {
+		return schemaMigrationsDatabaseDDLCluster
+	}
+	return schemaMigrationsDatabaseDDLSingle
+}
+
+func (m *Migration) tableDDL() string {
+	if m.clusterMode {
+		return schemaMigrationsTableDDLCluster
+	}
+	return schemaMigrationsTableDDLSingle
 }

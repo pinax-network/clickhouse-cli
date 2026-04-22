@@ -10,8 +10,12 @@ import (
 	"go.uber.org/zap"
 )
 
+func debugEnabled() bool {
+	return os.Getenv("DEBUG") != ""
+}
+
 func init() {
-	err := log.InitializeGlobalLogger(os.Getenv("DEBUG") != "")
+	err := log.Initialize(log.Options{Debug: debugEnabled()})
 	if err != nil {
 		log.Fatal("failed to initialize logger", zap.Error(err))
 	}

@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/pinax-network/clickhouse-cli/pkg/log"
 
@@ -17,8 +16,9 @@ type Client struct {
 	conn driver.Conn
 }
 
-// NewClient creates a new Clickhouse client
-func NewClient(ctx context.Context, node, user, password string) (*Client, error) {
+// NewClient creates a new Clickhouse client. When debug is true the underlying
+// driver emits verbose logs through the package logger.
+func NewClient(ctx context.Context, node, user, password string, debug bool) (*Client, error) {
 
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{node},
@@ -26,7 +26,7 @@ func NewClient(ctx context.Context, node, user, password string) (*Client, error
 			Username: user,
 			Password: password,
 		},
-		Debug: os.Getenv("DEBUG") == "true",
+		Debug: debug,
 		Debugf: func(format string, v ...any) {
 			log.Debugf(format, v...)
 		},
@@ -52,29 +52,31 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) execute(ctx context.Context, query string, parameters clickhouse.Parameters) error {
+// Execute runs a statement that returns no rows.
+func (c *Client) Execute(ctx context.Context, query string, parameters clickhouse.Parameters) error {
 	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
-	return c.conn.Exec(getContext(ctx, parameters), query)
+	return c.conn.Exec(queryContext(ctx, parameters), query)
 }
 
-func (c *Client) queryRows(ctx context.Context, query string, parameters clickhouse.Parameters) (driver.Rows, error) {
+// QueryRows runs a query and returns its rows. The caller owns the returned
+// driver.Rows and must close it.
+func (c *Client) QueryRows(ctx context.Context, query string, parameters clickhouse.Parameters) (driver.Rows, error) {
 	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
-	return c.conn.Query(getContext(ctx, parameters), query)
+	return c.conn.Query(queryContext(ctx, parameters), query)
 }
 
-func (c *Client) queryStruct(ctx context.Context, query string, parameters clickhouse.Parameters, result any) error {
+// QueryStruct runs a query expected to return a single row and scans it into result.
+func (c *Client) QueryStruct(ctx context.Context, query string, parameters clickhouse.Parameters, result any) error {
 	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
-	err := c.conn.QueryRow(getContext(ctx, parameters), query, result).ScanStruct(result)
-	if err != nil {
+	if err := c.conn.QueryRow(queryContext(ctx, parameters), query).ScanStruct(result); err != nil {
 		return fmt.Errorf("failed to execute Clickhouse query: %w", err)
 	}
 	return nil
 }
 
-func getContext(ctx context.Context, parameters clickhouse.Parameters) context.Context {
-	chCtx := ctx
-	if parameters != nil {
-		chCtx = clickhouse.Context(ctx, clickhouse.WithParameters(parameters))
+func queryContext(ctx context.Context, parameters clickhouse.Parameters) context.Context {
+	if parameters == nil {
+		return ctx
 	}
-	return chCtx
+	return clickhouse.Context(ctx, clickhouse.WithParameters(parameters))
 }

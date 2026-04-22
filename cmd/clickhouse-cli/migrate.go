@@ -22,27 +22,38 @@ var migrateCmd = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "create-migrations-table",
-			Usage:   "Create the schema migration table and database if it does not exist. ",
+			Usage:   "Create the schema migration table and database if it does not exist.",
 			Value:   false,
 			Sources: cli.EnvVars("CLICKHOUSE_CREATE_MIGRATIONS_TABLE"),
+		},
+		&cli.BoolFlag{
+			Name:    "cluster-mode",
+			Usage:   "Use Replicated database and ReplicatedMergeTree engines with ON CLUSTER. Disable for single-node setups.",
+			Value:   true,
+			Sources: cli.EnvVars("CLICKHOUSE_CLUSTER_MODE"),
 		},
 	},
 }
 
 func runMigrate(ctx context.Context, c *cli.Command) error {
 
-	clickhouseClient, err := clickhouse.NewClient(ctx, c.String("node"), c.String("user"), c.String("password"))
+	clickhouseClient, err := clickhouse.NewClient(ctx, c.String("node"), c.String("user"), c.String("password"), debugEnabled())
 	if err != nil {
 		return err
 	}
 
-	migration, err := clickhouse.NewMigration(clickhouseClient, c.Args().First(), c.String("schema-table"), c.Bool("create-migrations-table"))
+	migration, err := clickhouse.NewMigration(
+		clickhouseClient,
+		c.Args().First(),
+		c.String("schema-table"),
+		c.Bool("create-migrations-table"),
+		c.Bool("cluster-mode"),
+	)
 	if err != nil {
 		return err
 	}
 
-	err = migration.Run(ctx)
-	if err != nil {
+	if err := migration.Run(ctx); err != nil {
 		return err
 	}
 
