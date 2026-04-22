@@ -5,8 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path"
+	"io/fs"
 	"regexp"
 	"sort"
 	"strconv"
@@ -51,14 +50,14 @@ type MigrationRow struct {
 
 type Migration struct {
 	chClient    *Client
-	schemaDir   string
+	schemaFS    fs.FS
 	database    string
 	table       string
 	createTable bool
 	clusterMode bool
 }
 
-func NewMigration(chClient *Client, schemaDir, table string, createTable, clusterMode bool) (*Migration, error) {
+func NewMigration(chClient *Client, schemaFS fs.FS, table string, createTable, clusterMode bool) (*Migration, error) {
 
 	tableSplit := strings.Split(table, ".")
 	if len(tableSplit) != 2 {
@@ -75,7 +74,7 @@ func NewMigration(chClient *Client, schemaDir, table string, createTable, cluste
 
 	return &Migration{
 		chClient:    chClient,
-		schemaDir:   schemaDir,
+		schemaFS:    schemaFS,
 		database:    database,
 		table:       tableName,
 		createTable: createTable,
@@ -104,7 +103,7 @@ func (m *Migration) Run(ctx context.Context) error {
 	}
 
 	for _, mf := range migrationFiles {
-		migration, err := os.ReadFile(path.Join(m.schemaDir, mf.File))
+		migration, err := fs.ReadFile(m.schemaFS, mf.File)
 		if err != nil {
 			return fmt.Errorf("failed to read migration file %s: %w", mf.File, err)
 		}
@@ -162,14 +161,14 @@ func (m *Migration) fetchLatestVersion(ctx context.Context) (version int, dirty 
 // parseMigrationDirectory reads the schema directory and returns the migrations in sequence order.
 // An empty directory (no matching files) returns an empty slice, not an error.
 func (m *Migration) parseMigrationDirectory() ([]MigrationFile, error) {
-	return parseMigrationDirectory(m.schemaDir)
+	return parseMigrationDirectory(m.schemaFS)
 }
 
-func parseMigrationDirectory(dir string) ([]MigrationFile, error) {
+func parseMigrationDirectory(schemaFS fs.FS) ([]MigrationFile, error) {
 
-	files, err := os.ReadDir(dir)
+	files, err := fs.ReadDir(schemaFS, ".")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read migrations directory %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to read migrations directory: %w", err)
 	}
 
 	var migrationFiles []MigrationFile

@@ -1,13 +1,14 @@
 package clickhouse
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func writeFiles(t *testing.T, names []string) string {
+func writeFiles(t *testing.T, names []string) fs.FS {
 	t.Helper()
 	dir := t.TempDir()
 	for _, name := range names {
@@ -15,7 +16,7 @@ func writeFiles(t *testing.T, names []string) string {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	return dir
+	return os.DirFS(dir)
 }
 
 func TestParseMigrationDirectory_OrderedAndIgnoresNonMatching(t *testing.T) {
@@ -42,7 +43,7 @@ func TestParseMigrationDirectory_OrderedAndIgnoresNonMatching(t *testing.T) {
 }
 
 func TestParseMigrationDirectory_EmptyReturnsNoError(t *testing.T) {
-	dir := t.TempDir()
+	dir := os.DirFS(t.TempDir())
 	got, err := parseMigrationDirectory(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -92,7 +93,7 @@ func TestNewMigration_RejectsInvalidIdentifiers(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc, func(t *testing.T) {
-			if _, err := NewMigration(nil, "/tmp", tc, false, false); err == nil {
+			if _, err := NewMigration(nil, os.DirFS("/tmp"), tc, false, false); err == nil {
 				t.Fatalf("expected error for %q", tc)
 			}
 		})
@@ -100,7 +101,7 @@ func TestNewMigration_RejectsInvalidIdentifiers(t *testing.T) {
 }
 
 func TestNewMigration_AcceptsValidIdentifiers(t *testing.T) {
-	m, err := NewMigration(nil, "/tmp", "my_db.schema_migrations", true, true)
+	m, err := NewMigration(nil, os.DirFS("/tmp"), "my_db.schema_migrations", true, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

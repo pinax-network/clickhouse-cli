@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/pinax-network/clickhouse-cli/pkg/clickhouse"
 
@@ -49,7 +50,7 @@ func runMigrate(ctx context.Context, c *cli.Command) error {
 
 	migration, err := clickhouse.NewMigration(
 		clickhouseClient,
-		schemaDir,
+		os.DirFS(schemaDir),
 		c.String("schema-table"),
 		c.Bool("create-migrations-table"),
 		c.Bool("cluster-mode"),
