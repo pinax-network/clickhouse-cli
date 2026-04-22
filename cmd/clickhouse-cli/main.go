@@ -1,9 +1,10 @@
 package main
 
 import (
-	"clickhouse-cli/pkg/log"
 	"context"
 	"os"
+
+	"github.com/pinax-network/clickhouse-cli/pkg/log"
 
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"

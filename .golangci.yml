@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - canonicalheader
+    - copyloopvar
+    - exhaustive
+    - loggercheck
+    - nilnil
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: false
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
