@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pinax-network/clickhouse-cli/pkg/log"
+	"go.uber.org/zap"
 )
 
 func (c *Client) databaseExists(ctx context.Context, databaseName string) (bool, error) {
@@ -18,7 +19,7 @@ func (c *Client) databaseExists(ctx context.Context, databaseName string) (bool,
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			log.Error("failed to call close on rows")
+			log.Error("failed to call close on rows", zap.Error(err))
 		}
 	}()
 
@@ -41,7 +42,7 @@ func (c *Client) tableExists(ctx context.Context, databaseName, tableName string
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			log.Error("failed to call close on rows")
+			log.Error("failed to call close on rows", zap.Error(err))
 		}
 	}()
 

@@ -200,7 +200,7 @@ func Debug(message string, additionalFields ...zap.Field) {
 }
 
 func Debugf(template string, args ...any) {
-	SugaredLogger.Debugf(template, args)
+	SugaredLogger.Debugf(template, args...)
 }
 
 func Info(message string, additionalFields ...zap.Field) {
@@ -208,7 +208,7 @@ func Info(message string, additionalFields ...zap.Field) {
 }
 
 func Infof(template string, args ...any) {
-	SugaredLogger.Infof(template, args)
+	SugaredLogger.Infof(template, args...)
 }
 
 func Warn(message string, additionalFields ...zap.Field) {
@@ -216,7 +216,7 @@ func Warn(message string, additionalFields ...zap.Field) {
 }
 
 func Warnf(template string, args ...any) {
-	SugaredLogger.Warnf(template, args)
+	SugaredLogger.Warnf(template, args...)
 }
 
 func Error(message string, additionalFields ...zap.Field) {
@@ -224,7 +224,7 @@ func Error(message string, additionalFields ...zap.Field) {
 }
 
 func Errorf(template string, args ...any) {
-	SugaredLogger.Errorf(template, args)
+	SugaredLogger.Errorf(template, args...)
 }
 
 func Panic(message string, additionalFields ...zap.Field) {
@@ -232,7 +232,7 @@ func Panic(message string, additionalFields ...zap.Field) {
 }
 
 func Panicf(template string, args ...any) {
-	SugaredLogger.Panicf(template, args)
+	SugaredLogger.Panicf(template, args...)
 }
 
 func Fatal(message string, additionalFields ...zap.Field) {
@@ -240,5 +240,5 @@ func Fatal(message string, additionalFields ...zap.Field) {
 }
 
 func Fatalf(template string, args ...any) {
-	SugaredLogger.Fatalf(template, args)
+	SugaredLogger.Fatalf(template, args...)
 }
