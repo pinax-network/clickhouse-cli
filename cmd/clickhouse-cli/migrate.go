@@ -37,6 +37,11 @@ var migrateCmd = &cli.Command{
 
 func runMigrate(ctx context.Context, c *cli.Command) error {
 
+	schemaDir := c.Args().First()
+	if schemaDir == "" {
+		return cli.Exit("migration directory argument is required (see `clickhouse-cli migrate --help`)", 1)
+	}
+
 	clickhouseClient, err := clickhouse.NewClient(ctx, c.String("node"), c.String("user"), c.String("password"), debugEnabled())
 	if err != nil {
 		return err
@@ -44,7 +49,7 @@ func runMigrate(ctx context.Context, c *cli.Command) error {
 
 	migration, err := clickhouse.NewMigration(
 		clickhouseClient,
-		c.Args().First(),
+		schemaDir,
 		c.String("schema-table"),
 		c.Bool("create-migrations-table"),
 		c.Bool("cluster-mode"),

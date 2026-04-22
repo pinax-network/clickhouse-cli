@@ -37,7 +37,7 @@ func Initialize(opts Options) error {
 
 	var core zapcore.Core
 	if opts.File != nil {
-		core = zapcore.NewCore(encoder, opts.File, level)
+		core = zapcore.NewCore(encoder, zapcore.Lock(zapcore.AddSync(opts.File)), level)
 	} else {
 		highPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 			return lvl >= zapcore.ErrorLevel

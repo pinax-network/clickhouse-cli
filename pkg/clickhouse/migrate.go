@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -149,6 +150,9 @@ func (m *Migration) fetchLatestVersion(ctx context.Context) (version int, dirty 
 	var res MigrationRow
 	query := fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY version DESC, sequence DESC LIMIT 1", m.database, m.table)
 	if err := m.chClient.QueryStruct(ctx, query, nil, &res); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
 		return 0, false, fmt.Errorf("failed to fetch latest migration sequence: %w", err)
 	}
 
