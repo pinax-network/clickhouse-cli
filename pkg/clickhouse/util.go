@@ -37,7 +37,7 @@ func (c *Client) tableExists(ctx context.Context, databaseName, tableName string
 		map[string]string{"database": databaseName, "name": tableName},
 	)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if database exists: %w", err)
+		return false, fmt.Errorf("failed to check if table exists: %w", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
