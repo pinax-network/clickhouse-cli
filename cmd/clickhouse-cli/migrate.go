@@ -44,7 +44,7 @@ func runMigrate(ctx context.Context, c *cli.Command) error {
 		return cli.Exit("migration directory argument is required (see `clickhouse-cli migrate --help`)", 1)
 	}
 
-	clickhouseClient, err := clickhouse.NewClient(ctx, log.ZapLogger, c.String("node"), c.String("user"), c.String("password"), debugEnabled())
+	clickhouseClient, err := clickhouse.NewClient(ctx, log.ZapLogger, c.String("node"), c.String("user"), c.String("password"), c.String("database"), debugEnabled())
 	if err != nil {
 		return err
 	}
