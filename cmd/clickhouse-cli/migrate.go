@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/pinax-network/clickhouse-cli/pkg/clickhouse"
+	"github.com/pinax-network/clickhouse-cli/pkg/log"
 
 	"github.com/urfave/cli/v3"
 )
@@ -43,7 +44,7 @@ func runMigrate(ctx context.Context, c *cli.Command) error {
 		return cli.Exit("migration directory argument is required (see `clickhouse-cli migrate --help`)", 1)
 	}
 
-	clickhouseClient, err := clickhouse.NewClient(ctx, c.String("node"), c.String("user"), c.String("password"), debugEnabled())
+	clickhouseClient, err := clickhouse.NewClient(ctx, log.ZapLogger, c.String("node"), c.String("user"), c.String("password"), debugEnabled())
 	if err != nil {
 		return err
 	}

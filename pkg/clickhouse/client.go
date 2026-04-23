@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pinax-network/clickhouse-cli/pkg/log"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
@@ -13,13 +11,16 @@ import (
 
 // Client represents a Clickhouse client
 type Client struct {
-	conn driver.Conn
+	conn   driver.Conn
+	logger *zap.Logger
 }
 
-// NewClient creates a new Clickhouse client. When debug is true the underlying
-// driver emits verbose logs through the package logger.
-func NewClient(ctx context.Context, node, user, password string, debug bool) (*Client, error) {
+// NewClient creates a new Clickhouse client. The provided logger is used for
+// all logging emitted by the client. When debug is true the underlying driver
+// emits verbose logs through the same logger.
+func NewClient(ctx context.Context, logger *zap.Logger, node, user, password string, debug bool) (*Client, error) {
 
+	sugar := logger.Sugar()
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{node},
 		Auth: clickhouse.Auth{
@@ -28,7 +29,7 @@ func NewClient(ctx context.Context, node, user, password string, debug bool) (*C
 		},
 		Debug: debug,
 		Debugf: func(format string, v ...any) {
-			log.Debugf(format, v...)
+			sugar.Debugf(format, v...)
 		},
 	})
 	if err != nil {
@@ -39,9 +40,9 @@ func NewClient(ctx context.Context, node, user, password string, debug bool) (*C
 		return nil, fmt.Errorf("failed to ping Clickhouse: %w", err)
 	}
 
-	log.Info("successfully connected to Clickhouse", zap.String("node", node))
+	logger.Info("successfully connected to Clickhouse", zap.String("node", node))
 
-	return &Client{conn: conn}, nil
+	return &Client{conn: conn, logger: logger}, nil
 }
 
 // Close closes the connection to the Clickhouse server
@@ -54,20 +55,20 @@ func (c *Client) Close() error {
 
 // Execute runs a statement that returns no rows.
 func (c *Client) Execute(ctx context.Context, query string, parameters clickhouse.Parameters) error {
-	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
+	c.logger.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
 	return c.conn.Exec(queryContext(ctx, parameters), query)
 }
 
 // QueryRows runs a query and returns its rows. The caller owns the returned
 // driver.Rows and must close it.
 func (c *Client) QueryRows(ctx context.Context, query string, parameters clickhouse.Parameters) (driver.Rows, error) {
-	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
+	c.logger.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
 	return c.conn.Query(queryContext(ctx, parameters), query)
 }
 
 // QueryStruct runs a query expected to return a single row and scans it into result.
 func (c *Client) QueryStruct(ctx context.Context, query string, parameters clickhouse.Parameters, result any) error {
-	log.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
+	c.logger.Debug("executing query", zap.String("query", query), zap.Any("parameters", parameters))
 	if err := c.conn.QueryRow(queryContext(ctx, parameters), query).ScanStruct(result); err != nil {
 		return fmt.Errorf("failed to execute Clickhouse query: %w", err)
 	}

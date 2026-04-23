@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pinax-network/clickhouse-cli/pkg/log"
-
 	"go.uber.org/zap"
 )
 
@@ -109,7 +107,7 @@ func (m *Migration) Run(ctx context.Context) error {
 		}
 
 		if mf.Seq <= latestVersion {
-			log.Info("skipping migration file as it's already applied", zap.String("file", mf.File))
+			m.chClient.logger.Info("skipping migration file as it's already applied", zap.String("file", mf.File))
 			continue
 		}
 
@@ -120,14 +118,14 @@ func (m *Migration) Run(ctx context.Context) error {
 			}
 
 			if err := m.chClient.Execute(ctx, query, nil); err != nil {
-				log.Error("failed to execute migration", zap.String("query", query), zap.Error(err))
+				m.chClient.logger.Error("failed to execute migration", zap.String("query", query), zap.Error(err))
 				if updateErr := m.updateTable(ctx, mf.Seq, true); updateErr != nil {
 					return fmt.Errorf("failed to update migration table: %w", updateErr)
 				}
 				return fmt.Errorf("failed to execute migration: %w", err)
 			}
 		}
-		log.Info("successfully applied migration", zap.String("file", mf.File))
+		m.chClient.logger.Info("successfully applied migration", zap.String("file", mf.File))
 
 		if err := m.updateTable(ctx, mf.Seq, false); err != nil {
 			return fmt.Errorf("failed to update migration table: %w", err)
@@ -220,7 +218,7 @@ func (m *Migration) checkMigrationTable(ctx context.Context) error {
 		if !m.createTable {
 			return fmt.Errorf("database %q for the schema migrations doesn't exist and should not be created", m.database)
 		}
-		log.Info("creating database for schema_migrations", zap.String("database", m.database))
+		m.chClient.logger.Info("creating database for schema_migrations", zap.String("database", m.database))
 		if err := m.chClient.Execute(ctx, fmt.Sprintf(m.databaseDDL(), m.database), nil); err != nil {
 			return fmt.Errorf("failed to create database for schema migrations: %w", err)
 		}
@@ -234,7 +232,7 @@ func (m *Migration) checkMigrationTable(ctx context.Context) error {
 		if !m.createTable {
 			return fmt.Errorf("table '%s.%s' for the schema migrations doesn't exist and should not be created", m.database, m.table)
 		}
-		log.Info("creating table for schema_migrations", zap.String("database", m.database), zap.String("table", m.table))
+		m.chClient.logger.Info("creating table for schema_migrations", zap.String("database", m.database), zap.String("table", m.table))
 		if err := m.chClient.Execute(ctx, fmt.Sprintf(m.tableDDL(), m.database, m.table), nil); err != nil {
 			return fmt.Errorf("failed to create table for schema migrations: %w", err)
 		}
