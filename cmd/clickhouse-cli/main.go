@@ -48,6 +48,12 @@ func main() {
 				Usage:   "Password for the ClickHouse user.",
 				Value:   "",
 				Sources: cli.EnvVars("CLICKHOUSE_PASSWORD"),
+			}, &cli.StringFlag{
+				Name:    "database",
+				Aliases: []string{"d"},
+				Usage:   "Default database to connect to. Leave empty to not select a database on connect.",
+				Value:   "",
+				Sources: cli.EnvVars("CLICKHOUSE_DATABASE"),
 			},
 		},
 	}

@@ -17,8 +17,9 @@ type Client struct {
 
 // NewClient creates a new Clickhouse client. The provided logger is used for
 // all logging emitted by the client. When debug is true the underlying driver
-// emits verbose logs through the same logger.
-func NewClient(ctx context.Context, logger *zap.Logger, node, user, password string, debug bool) (*Client, error) {
+// emits verbose logs through the same logger. If database is empty no default
+// database is selected on the connection.
+func NewClient(ctx context.Context, logger *zap.Logger, node, user, password, database string, debug bool) (*Client, error) {
 
 	sugar := logger.Sugar()
 	conn, err := clickhouse.Open(&clickhouse.Options{
@@ -26,6 +27,7 @@ func NewClient(ctx context.Context, logger *zap.Logger, node, user, password str
 		Auth: clickhouse.Auth{
 			Username: user,
 			Password: password,
+			Database: database,
 		},
 		Debug: debug,
 		Debugf: func(format string, v ...any) {
@@ -40,7 +42,7 @@ func NewClient(ctx context.Context, logger *zap.Logger, node, user, password str
 		return nil, fmt.Errorf("failed to ping Clickhouse: %w", err)
 	}
 
-	logger.Info("successfully connected to Clickhouse", zap.String("node", node))
+	logger.Info("successfully connected to Clickhouse", zap.String("node", node), zap.String("database", database))
 
 	return &Client{conn: conn, logger: logger}, nil
 }
